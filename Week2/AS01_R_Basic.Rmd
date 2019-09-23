@@ -8,6 +8,7 @@ output:
     number_sections: yes
     theme: cerulean
     toc: yes
+    css: style.css
 editor_options:
   chunk_output_type: inline
 ---
@@ -129,7 +130,7 @@ df2 <- df2[order(df2$a, -df2$b),]
 
 ```
 
-* `order(a, b)`: Sort the data.frame in orders of increasing `a`, and then increasing `b`.
+* `order(a, b)`: Sort the data.frame in orders of increasing `b`, and then increasing `a`.
 * The negative sign represents the decreasing order.
 
 # Practice_01_3_2
@@ -149,7 +150,7 @@ dt1.3.2 %>%
   kable_styling()
 
 # Reorder
-dt1.3.2 <- dt1.3.2[order(-dt1.3.2$export, -dt1.3.2$import),]
+dt1.3.2 <- dt1.3.2[order(-dt1.3.2$import, -dt1.3.2$export),] #先排出口再入口
 dt1.3.2 %>%
   kable() %>%
   kable_styling()
