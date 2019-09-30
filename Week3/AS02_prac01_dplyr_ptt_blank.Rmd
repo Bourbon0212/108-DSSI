@@ -1,0 +1,132 @@
+---
+title: "Assignment#2 PPT_HatePolitics dplyr"
+author: "龔泓愷"
+date: "9/30/2019"
+output:
+  html_document:
+    highlight: zenburn
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Loading pkgs and options
+```{r library, message=FALSE, warning=FALSE}
+# add essential pkgs here
+library(tidyverse)
+options(stringsAsFactors = F) # 接下來讀入的 str 都不會自動轉成 factor
+```
+
+
+# Loading rda data
+- will creating two data frames, `posts` and `comments`.
+```{r}
+load("data/HatePolitics_Hang_20190101_2019_06_01.rda")
+```
+
+
+# Counting the top 5 commentors
+- 找出回文數最高的五個人
+```{r}
+comments %>%
+  count(commentor) %>%
+  arrange(desc(n)) %>%
+  slice(1:5)
+```
+
+
+# Counting the top 5 posters
+- 找出發文數最高的五個人
+```{r}
+posts %>%
+  count(poster) %>%
+  arrange(desc(n)) %>%
+  slice(1:5)
+```
+
+
+# Enumerating comment order for each posts
+- 產生兩個新的變項，`cindex`指出該則回文為該篇貼文的第幾則回文，`ctotal`指出該則回文所在的貼文共有幾則回文。
+- enumerating the order, the "floor", of each comment
+- Who are always reponse to Hang's posts very soon?
+- Practice goal: Using `group_by` and `mutate()`
+- comment order should be `cindex`
+- total comments of a post should be `ctotal`
+- You must use `row_number()` to get the order of each comment.
+```{r}
+comments %>%
+  group_by(plink) %>%
+  mutate(cindex = row_number(), ctotal = n()) %>%
+  ungroup() %>%
+  select(tag, commentor, cindex, ctotal) %>%
+  head(n=20)
+```
+
+# Calculating the average response order for each commentor
+- 延續上題，計算出每一個人回應的平均樓層（`avg_order` 比方說，某人共在三篇貼文的回應樓層為第3樓、第6、第9樓，其平均回應樓層為6）；如果除以該則貼文的總回文樹的話，就會變成平均回文樓層比例（以下範例為有除以總回文數的結果）。另外順便計算標準差（`sd_order`）以及每個人的總回文數量`tot_comment`。
+- Filter out those posts with fewer than 5 comments 不列計少於5則回文的貼文
+- Filter out those commentors with fewer than 10 comments 不列計在資料中回文總數少於10則的回文者
+- Only show top 10 commentors who always respond very fast
+
+```{r}
+comments %>%
+  # 前一題的結果
+  group_by(plink) %>%
+  arrange(ctimestamp) %>%
+  mutate(cindex = row_number(), ctotal = n()) %>%
+  filter(ctotal >= 5) %>% # 不列計少於5則回文的貼文
+  ungroup() %>%
+  # 本題根據留言者分類
+  group_by(commentor) %>%
+  summarise(avg_order = mean(cindex), sd_order = sd(cindex), tot_comment = n()) %>%
+  filter(tot_comment >= 10) %>% # 不列計在資料中回文總數少於10則的回文者
+  arrange(avg_order) %>%
+  slice(1:10)
+```
+
+# Challenge: Counting how many posts each commentor has responded to 
+針對每一個回文者，計算出下列數值：    
+1. 一共回過多少則post，一個post多個回文仍只算一次    
+2. 針對每篇post，最多曾回應一篇post幾次    
+3. 針對每篇post，最少曾回應一篇post幾次    
+4. 針對每篇post，平均回應過幾次    
+5. 針對每篇post，回應次數的標準差    
+```{r}
+comments %>%
+  group_by(commentor, plink) %>%
+  mutate(post_count = n()) %>% # 每篇貼文回覆次數
+  ungroup() %>%
+  group_by(commentor) %>%
+  summarize(num_post = length(unique(plink)), # 總計回覆不同貼文的篇數
+            max_c2p = max(post_count),
+            min_c2p = min(post_count),
+            mean_c2p = mean(post_count),
+            sd_c2p = sd(post_count)) %>%
+  arrange(desc(num_post)) %>%
+  slice(1:30)
+```
+
+# Call for idea
+- Except the above methods, try to propose your idea to show questionable users, possible big fans, and high frequency enthusiasts.
+
+    計算平均回覆時間差，若為 0 秒應是兩次回覆時間間隔小於 1 分鐘(原始資料最小單位為分鐘)
+    
+```{r}
+comments_2019 <- comments %>%
+  mutate(ctimestamp = as.POSIXct(ctimestamp, format="%m/%d %H:%M")) %>%
+  filter(ctimestamp < Sys.time()) # 只抓今年的
+
+comments_2019 %>%
+  arrange(desc(ctimestamp)) %>%
+  group_by(commentor) %>%
+  mutate(lag_ctimestamp = lag(ctimestamp),
+         time_diff = lag_ctimestamp - ctimestamp) %>%
+  summarise(mean_time = mean(time_diff, na.rm = T)) %>%
+  arrange(mean_time)
+```
