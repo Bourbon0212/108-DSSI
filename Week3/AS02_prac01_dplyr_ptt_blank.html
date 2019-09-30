@@ -550,29 +550,28 @@ $(document).ready(function () {
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb9-1" title="1">comments <span class="op">%&gt;%</span></a>
 <a class="sourceLine" id="cb9-2" title="2"><span class="st">  </span><span class="co"># 前一題的結果</span></a>
 <a class="sourceLine" id="cb9-3" title="3"><span class="st">  </span><span class="kw">group_by</span>(plink) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb9-4" title="4"><span class="st">  </span><span class="kw">arrange</span>(ctimestamp) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb9-5" title="5"><span class="st">  </span><span class="kw">mutate</span>(<span class="dt">cindex =</span> <span class="kw">row_number</span>(), <span class="dt">ctotal =</span> <span class="kw">n</span>()) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb9-6" title="6"><span class="st">  </span><span class="kw">filter</span>(ctotal <span class="op">&gt;=</span><span class="st"> </span><span class="dv">5</span>) <span class="op">%&gt;%</span><span class="st"> </span><span class="co"># 不列計少於5則回文的貼文</span></a>
-<a class="sourceLine" id="cb9-7" title="7"><span class="st">  </span><span class="kw">ungroup</span>() <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb9-8" title="8"><span class="st">  </span><span class="co"># 本題根據留言者分類</span></a>
-<a class="sourceLine" id="cb9-9" title="9"><span class="st">  </span><span class="kw">group_by</span>(commentor) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb9-10" title="10"><span class="st">  </span><span class="kw">summarise</span>(<span class="dt">avg_order =</span> <span class="kw">mean</span>(cindex), <span class="dt">sd_order =</span> <span class="kw">sd</span>(cindex), <span class="dt">tot_comment =</span> <span class="kw">n</span>()) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb9-11" title="11"><span class="st">  </span><span class="kw">filter</span>(tot_comment <span class="op">&gt;=</span><span class="st"> </span><span class="dv">10</span>) <span class="op">%&gt;%</span><span class="st"> </span><span class="co"># 不列計在資料中回文總數少於10則的回文者</span></a>
-<a class="sourceLine" id="cb9-12" title="12"><span class="st">  </span><span class="kw">arrange</span>(avg_order) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb9-13" title="13"><span class="st">  </span><span class="kw">slice</span>(<span class="dv">1</span><span class="op">:</span><span class="dv">10</span>)</a></code></pre></div>
+<a class="sourceLine" id="cb9-4" title="4"><span class="st">  </span><span class="kw">mutate</span>(<span class="dt">cindex =</span> <span class="kw">row_number</span>(), <span class="dt">ctotal =</span> <span class="kw">n</span>()) <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb9-5" title="5"><span class="st">  </span><span class="kw">filter</span>(ctotal <span class="op">&gt;=</span><span class="st"> </span><span class="dv">5</span>) <span class="op">%&gt;%</span><span class="st"> </span><span class="co"># 不列計少於5則回文的貼文</span></a>
+<a class="sourceLine" id="cb9-6" title="6"><span class="st">  </span><span class="kw">ungroup</span>() <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb9-7" title="7"><span class="st">  </span><span class="co"># 本題根據留言者分類</span></a>
+<a class="sourceLine" id="cb9-8" title="8"><span class="st">  </span><span class="kw">group_by</span>(commentor) <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb9-9" title="9"><span class="st">  </span><span class="kw">summarise</span>(<span class="dt">avg_order =</span> <span class="kw">mean</span>(cindex), <span class="dt">sd_order =</span> <span class="kw">sd</span>(cindex), <span class="dt">tot_comment =</span> <span class="kw">n</span>()) <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb9-10" title="10"><span class="st">  </span><span class="kw">filter</span>(tot_comment <span class="op">&gt;=</span><span class="st"> </span><span class="dv">10</span>) <span class="op">%&gt;%</span><span class="st"> </span><span class="co"># 不列計在資料中回文總數少於10則的回文者</span></a>
+<a class="sourceLine" id="cb9-11" title="11"><span class="st">  </span><span class="kw">arrange</span>(avg_order) <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb9-12" title="12"><span class="st">  </span><span class="kw">slice</span>(<span class="dv">1</span><span class="op">:</span><span class="dv">10</span>)</a></code></pre></div>
 <pre><code>## # A tibble: 10 x 4
 ##    commentor avg_order sd_order tot_comment
 ##    &lt;chr&gt;         &lt;dbl&gt;    &lt;dbl&gt;       &lt;int&gt;
-##  1 ianmon         4.1      4.18          10
-##  2 kutkin         4.7      3.65          10
-##  3 xox5678        6.8      5.96          35
-##  4 BleedWang      7.38     5.81          13
-##  5 z739           7.77    10.4           99
-##  6 ezJapan        8.18     4.45          11
-##  7 lock0308       8.23     8.16          13
-##  8 nimaj          8.3      5.25          10
-##  9 CCY0927        8.62     5.64          47
-## 10 bluebugi       9        7.78          15</code></pre>
+##  1 kutkin         4.7      3.65          10
+##  2 a520           6        5.60          18
+##  3 ianmon         6.8     10.9           10
+##  4 z739           6.92    10.1           99
+##  5 xox5678        7.2      6.15          35
+##  6 jjjjjjs        7.77     9.94          57
+##  7 GoOdGaMe       8        9.76          58
+##  8 lock0308       8        8.24          13
+##  9 ezJapan        8.18     4.45          11
+## 10 nimaj          8.3      5.25          10</code></pre>
 </div>
 <div id="challenge-counting-how-many-posts-each-commentor-has-responded-to" class="section level1">
 <h1><span class="header-section-number">7</span> Challenge: Counting how many posts each commentor has responded to</h1>
@@ -613,33 +612,37 @@ $(document).ready(function () {
 <h1><span class="header-section-number">8</span> Call for idea</h1>
 <ul>
 <li><p>Except the above methods, try to propose your idea to show questionable users, possible big fans, and high frequency enthusiasts.</p>
-<p>計算平均回覆時間差，若為 0 秒應是兩次回覆時間間隔小於 1 分鐘(原始資料最小單位為分鐘)</p></li>
+<p>計算鄉民每則推文平均時間差，原始資料最小單位為分鐘。</p></li>
 </ul>
 <div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb13-1" title="1">comments_<span class="dv">2019</span> &lt;-<span class="st"> </span>comments <span class="op">%&gt;%</span></a>
 <a class="sourceLine" id="cb13-2" title="2"><span class="st">  </span><span class="kw">mutate</span>(<span class="dt">ctimestamp =</span> <span class="kw">as.POSIXct</span>(ctimestamp, <span class="dt">format=</span><span class="st">&quot;%m/%d %H:%M&quot;</span>)) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb13-3" title="3"><span class="st">  </span><span class="kw">filter</span>(ctimestamp <span class="op">&lt;</span><span class="st"> </span><span class="kw">Sys.time</span>()) <span class="co"># 只抓今年的</span></a>
-<a class="sourceLine" id="cb13-4" title="4"></a>
-<a class="sourceLine" id="cb13-5" title="5">comments_<span class="dv">2019</span> <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb13-6" title="6"><span class="st">  </span><span class="kw">arrange</span>(<span class="kw">desc</span>(ctimestamp)) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb13-7" title="7"><span class="st">  </span><span class="kw">group_by</span>(commentor) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb13-8" title="8"><span class="st">  </span><span class="kw">mutate</span>(<span class="dt">lag_ctimestamp =</span> <span class="kw">lag</span>(ctimestamp),</a>
-<a class="sourceLine" id="cb13-9" title="9">         <span class="dt">time_diff =</span> lag_ctimestamp <span class="op">-</span><span class="st"> </span>ctimestamp) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb13-10" title="10"><span class="st">  </span><span class="kw">summarise</span>(<span class="dt">mean_time =</span> <span class="kw">mean</span>(time_diff, <span class="dt">na.rm =</span> T)) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb13-11" title="11"><span class="st">  </span><span class="kw">arrange</span>(mean_time)</a></code></pre></div>
-<pre><code>## # A tibble: 12,056 x 2
-##    commentor   mean_time
-##    &lt;chr&gt;       &lt;drtn&gt;   
-##  1 a123881     0 secs   
-##  2 a14142222   0 secs   
-##  3 a186361     0 secs   
-##  4 a8077616530 0 secs   
-##  5 a9876543245 0 secs   
-##  6 aa001741    0 secs   
-##  7 Aatrox      0 secs   
-##  8 Acalanatha  0 secs   
-##  9 accordance  0 secs   
-## 10 ace1129     0 secs   
-## # ... with 12,046 more rows</code></pre>
+<a class="sourceLine" id="cb13-3" title="3"><span class="st">  </span><span class="kw">filter</span>(ctimestamp <span class="op">&lt;</span><span class="st"> </span><span class="kw">Sys.time</span>()) <span class="op">%&gt;%</span><span class="co"># 只抓今年的</span></a>
+<a class="sourceLine" id="cb13-4" title="4"><span class="st">  </span><span class="kw">group_by</span>(commentor) <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb13-5" title="5"><span class="st">  </span><span class="kw">mutate</span>(<span class="dt">tot_comment =</span> <span class="kw">n</span>()) <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb13-6" title="6"><span class="st">  </span><span class="kw">filter</span>(tot_comment <span class="op">&gt;=</span><span class="st"> </span><span class="dv">10</span>) <span class="op">%&gt;%</span><span class="st"> </span><span class="co"># 不列計在資料中回文總數少於10則的回文者</span></a>
+<a class="sourceLine" id="cb13-7" title="7"><span class="st">  </span><span class="kw">ungroup</span>()</a>
+<a class="sourceLine" id="cb13-8" title="8"></a>
+<a class="sourceLine" id="cb13-9" title="9">comments_<span class="dv">2019</span> <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb13-10" title="10"><span class="st">  </span><span class="kw">arrange</span>(<span class="kw">desc</span>(ctimestamp)) <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb13-11" title="11"><span class="st">  </span><span class="kw">group_by</span>(commentor) <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb13-12" title="12"><span class="st">  </span><span class="kw">mutate</span>(<span class="dt">lag_ctimestamp =</span> <span class="kw">lag</span>(ctimestamp),</a>
+<a class="sourceLine" id="cb13-13" title="13">         <span class="dt">time_diff =</span> lag_ctimestamp <span class="op">-</span><span class="st"> </span>ctimestamp) <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb13-14" title="14"><span class="st">  </span><span class="kw">summarise</span>(<span class="dt">mean_time =</span> <span class="kw">mean</span>(time_diff, <span class="dt">na.rm =</span> T), <span class="dt">tot_comment =</span> <span class="kw">n</span>()) <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb13-15" title="15"><span class="st">  </span><span class="kw">arrange</span>(mean_time)</a></code></pre></div>
+<pre><code>## # A tibble: 2,628 x 3
+##    commentor    mean_time      tot_comment
+##    &lt;chr&gt;        &lt;drtn&gt;               &lt;int&gt;
+##  1 bhoward81090  0.000000 secs          15
+##  2 lueichun      2.264151 secs          54
+##  3 narutokai    25.000000 secs          13
+##  4 u8572535     37.714286 secs          36
+##  5 Aretimis7345 43.636364 secs          12
+##  6 ashotwa47    53.333333 secs          37
+##  7 bluesky2     53.333333 secs          10
+##  8 kamayer      80.000000 secs          10
+##  9 ce0716       81.428571 secs          15
+## 10 loona        90.000000 secs          69
+## # ... with 2,618 more rows</code></pre>
 </div>
 
 

@@ -78,7 +78,6 @@ comments %>%
 comments %>%
   # 前一題的結果
   group_by(plink) %>%
-  arrange(ctimestamp) %>%
   mutate(cindex = row_number(), ctotal = n()) %>%
   filter(ctotal >= 5) %>% # 不列計少於5則回文的貼文
   ungroup() %>%
@@ -115,18 +114,24 @@ comments %>%
 # Call for idea
 - Except the above methods, try to propose your idea to show questionable users, possible big fans, and high frequency enthusiasts.
 
-    計算平均回覆時間差，若為 0 秒應是兩次回覆時間間隔小於 1 分鐘(原始資料最小單位為分鐘)
+
+    計算鄉民每則推文平均時間差，原始資料最小單位為分鐘。
+    
     
 ```{r}
 comments_2019 <- comments %>%
   mutate(ctimestamp = as.POSIXct(ctimestamp, format="%m/%d %H:%M")) %>%
-  filter(ctimestamp < Sys.time()) # 只抓今年的
+  filter(ctimestamp < Sys.time()) %>%# 只抓今年的
+  group_by(commentor) %>%
+  mutate(tot_comment = n()) %>%
+  filter(tot_comment >= 10) %>% # 不列計在資料中回文總數少於10則的回文者
+  ungroup()
 
 comments_2019 %>%
   arrange(desc(ctimestamp)) %>%
   group_by(commentor) %>%
   mutate(lag_ctimestamp = lag(ctimestamp),
          time_diff = lag_ctimestamp - ctimestamp) %>%
-  summarise(mean_time = mean(time_diff, na.rm = T)) %>%
+  summarise(mean_time = mean(time_diff, na.rm = T), tot_comment = n()) %>%
   arrange(mean_time)
 ```
