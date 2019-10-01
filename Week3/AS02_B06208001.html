@@ -583,7 +583,7 @@ $(document).ready(function () {
 5. 針對每篇post，回應次數的標準差</p>
 <div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb11-1" title="1">comments <span class="op">%&gt;%</span></a>
 <a class="sourceLine" id="cb11-2" title="2"><span class="st">  </span><span class="kw">group_by</span>(commentor, plink) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb11-3" title="3"><span class="st">  </span><span class="kw">mutate</span>(<span class="dt">post_count =</span> <span class="kw">n</span>()) <span class="op">%&gt;%</span><span class="st"> </span><span class="co"># 每篇貼文回覆次數</span></a>
+<a class="sourceLine" id="cb11-3" title="3"><span class="st">  </span><span class="kw">summarize</span>(<span class="dt">post_count =</span> <span class="kw">n</span>()) <span class="op">%&gt;%</span><span class="st"> </span><span class="co"># 每篇貼文回覆次數</span></a>
 <a class="sourceLine" id="cb11-4" title="4"><span class="st">  </span><span class="kw">ungroup</span>() <span class="op">%&gt;%</span></a>
 <a class="sourceLine" id="cb11-5" title="5"><span class="st">  </span><span class="kw">group_by</span>(commentor) <span class="op">%&gt;%</span></a>
 <a class="sourceLine" id="cb11-6" title="6"><span class="st">  </span><span class="kw">summarize</span>(<span class="dt">num_post =</span> <span class="kw">length</span>(<span class="kw">unique</span>(plink)), <span class="co"># 總計回覆不同貼文的篇數</span></a>
@@ -596,16 +596,16 @@ $(document).ready(function () {
 <pre><code>## # A tibble: 30 x 6
 ##    commentor    num_post max_c2p min_c2p mean_c2p sd_c2p
 ##    &lt;chr&gt;           &lt;int&gt;   &lt;int&gt;   &lt;int&gt;    &lt;dbl&gt;  &lt;dbl&gt;
-##  1 aylao            1775      29       1     4.27   5.45
-##  2 bottger          1569     148       1    15.0   27.2 
-##  3 ninaman          1497      87       1    16.3   18.1 
-##  4 zeumax           1286     110       1    17.4   22.1 
-##  5 gn02118620       1206     128       1    36.4   36.7 
-##  6 bluesunflowe     1197      86       1    18.3   21.3 
-##  7 pupu20317        1190     103       1    15.6   24.6 
-##  8 formatted        1114      77       1    15.6   18.6 
-##  9 alex8725          984      64       1    12.1   13.9 
-## 10 c1951             886      38       1     6.19   7.05
+##  1 aylao            1775      29       1     1.74   2.10
+##  2 bottger          1569     148       1     3.23   6.16
+##  3 ninaman          1497      87       1     3.50   6.69
+##  4 zeumax           1286     110       1     4.59   7.68
+##  5 gn02118620       1206     128       1     6.10  13.6 
+##  6 bluesunflowe     1197      86       1     3.69   7.34
+##  7 pupu20317        1190     103       1     2.68   5.89
+##  8 formatted        1114      77       1     3.24   6.32
+##  9 alex8725          984      64       1     3.67   5.57
+## 10 c1951             886      38       1     2.28   2.99
 ## # ... with 20 more rows</code></pre>
 </div>
 <div id="call-for-idea" class="section level1">

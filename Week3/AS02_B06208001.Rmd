@@ -99,7 +99,7 @@ comments %>%
 ```{r}
 comments %>%
   group_by(commentor, plink) %>%
-  mutate(post_count = n()) %>% # 每篇貼文回覆次數
+  summarize(post_count = n()) %>% # 每篇貼文回覆次數
   ungroup() %>%
   group_by(commentor) %>%
   summarize(num_post = length(unique(plink)), # 總計回覆不同貼文的篇數
