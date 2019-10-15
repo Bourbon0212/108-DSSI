@@ -1,0 +1,253 @@
+---
+title: "AS03_join_edu_data"
+author: "龔泓愷"
+date: "10/10/2019"
+output:
+  html_document:
+    highlight: zenburn
+    number_sections: no
+    theme: cerulean
+    toc: yes
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+options(stringsAsFactors = F)
+```
+
+# Q1 Joining educational data
+- Reading educational data from the following csv file.
+
+## Town level educational data
+
+- Original data is village-level data
+- Following In-Class tutorial, using `group_by()` to create town-level statistical data.
+
+```{r, message=FALSE, warning=FALSE}
+edu_town <- read_csv("data/opendata107Y020.csv") %>%
+  slice(-1) %>% # 移除中文標題
+  mutate_at(vars(contains("edu")), funs(as.numeric(.))) %>% # 把 char 轉 num
+  mutate(site_id = str_replace(site_id, "鳳山一", "鳳山區")) %>% 
+  mutate(site_id = str_replace(site_id, "鳳山二", "鳳山區")) %>%
+  mutate(site_id = str_replace(site_id, "三民一", "三民區")) %>% 
+  mutate(site_id = str_replace(site_id, "三民二", "三民區")) %>%
+  mutate(site_id = str_replace(site_id, "　", "")) %>% # "北 區" > "北區"
+  group_by(site_id) %>%
+  summarise_at(vars(contains("edu")), funs(sum)) %>% # 含有 edu 的欄位分別依 group 加總
+  glimpse()
+```
+
+
+```{r}
+#edu_town_long <- edu_town %>%
+#  gather(key = "key", "value", -site_id) %>%
+#  mutate(key = str_replace(key, "illiterate", "illiterate_illiterate")) %>%
+#  mutate(key = str_replace(key, "selftaughtl", "selftaught_selftaught")) %>%
+#  mutate(key = str_replace(key, "juniorcollege_2ys", "juniorcollege2ys")) %>%
+#  mutate(key = str_replace(key, "juniorcollege_5ys_final2y", "juniorcollege5ysfinal2y"))  %>%
+#  mutate(key = str_replace(key, "juniorcollege_5ys_first3y", "juniorcollege5ysfirst3y"))
+```
+
+## Loading town-level age, marriage, and referendum data
+- Loading town-level data created in class
+
+```{r message=FALSE, warning=FALSE}
+age_town <- read_csv("data/opendata107Y030.csv") %>%
+  slice(-1) %>%
+  mutate(vname  = paste0(site_id, village)) %>%
+  mutate_at(vars(c(contains("_f"), contains("_m"))), funs(as.numeric(.))) %>% # 把 char 轉 num
+  mutate(site_id = str_replace(site_id, "鳳山一", "鳳山區")) %>% 
+  mutate(site_id = str_replace(site_id, "鳳山二", "鳳山區")) %>%
+  mutate(site_id = str_replace(site_id, "三民一", "三民區")) %>% 
+  mutate(site_id = str_replace(site_id, "三民二", "三民區")) %>%
+  mutate(site_id = str_replace(site_id, "　", "")) %>% # "北 區" > "北區"
+  group_by(site_id) %>%
+  summarise_at(vars(c(contains("_f"), contains("_m"))), funs(sum)) %>% # 含有 edu 的欄位分別依 group 加總
+  glimpse()
+
+town_stat <- readRDS("town_stat.RDS")
+  
+town_ref10 <- readRDS("town_ref10.rds")
+```
+
+
+## Joining data together
+- Joining all town-leave data together (Including new educational dada, and age, marriage, referendum data introduced in class)
+```{r message=FALSE, warning=FALSE}
+join <- town_ref10 %>%
+  inner_join(edu_town, by = c("townfull" = "site_id")) %>%
+  inner_join(age_town, by = c("townfull" = "site_id")) %>%
+  inner_join(town_stat, by = c("townfull" = "site_id"))
+```
+
+## **Q1 Ans: Joined data dimension**
+- using `dim()` to display data dimension (should be 368). TAs will score Q1 according to the outcome.
+```{r message=FALSE, warning=FALSE}
+# dim(YOUR_DATA_FRAME_NAME)
+
+dim(join)
+```
+
+
+## **Q1 Ans: glimpse()**
+- Using `glimpse()` to print out data you join below. TAs will score Q1 according to the `glimpse()` outcome.
+```{r message=FALSE, warning=FALSE}
+# glimpse(YOUR_DATA_FRAME_NAME)
+
+glimpse(join)
+```
+
+# Q2 Open Question - Joining one more dimension
+- TASK: Collecting one more dimension from open data for town level and join it with the eucation, married, age, and referendum data.
+
+## Read the file
+```{r message=FALSE, warning=FALSE}
+pop_town <- read_csv("data/opendata106N0101.csv")[,c("site_id", "population_density")]
+
+join_pop <- join %>%
+  inner_join(pop_town, by = c("townfull" = "site_id"))
+```
+
+## Display the data dimension of the file
+```{r}
+dim(join_pop)
+```
+
+## **Q2 Ans: Answer following questions**
+- Data source link (the page you download the data): [Link](https://data.moi.gov.tw/MoiOD/Data/DataDetail.aspx?oid=D1450798-F85B-4063-9761-A24B8929A684)
+- Describe the data source in your words: 
+
+> 使用 106 年內政部資料開放平台，各鄉鎮市區人口密度
+
+## **Q2 Ans: Dim() of joined data frame**
+
+```{r}
+# dim(YOUR_DATA_FRAME_NAME)
+
+dim(join_pop)
+```
+
+
+## **Q2 Ans: glimpse() of joined data frame**
+```{r}
+# glimpse(YOUR_DATA_FRAME_NAME) 
+
+glimpse(join_pop)
+```
+
+# Q3 Open question - Linear regression
+ - Now, you have age, marriage, and education as indenpendent variables and referendum 10th agreement as the dependent variable.
+ - Go online and search how to run regression with R
+ - Report the regression result 
+
+## **Q3 Ans**
+```{r message=FALSE, warning=FALSE}
+# Perc_agree vs. Married Perc
+mod1 <- lm(formula = perc_agree ~ marriedPerc, data = join_pop)
+summary(mod1); cor.test(join_pop$perc_agree, join_pop$marriedPerc)
+
+plt1 <- ggplot(data = join_pop, aes(x = marriedPerc, y = perc_agree)) + 
+  geom_point() + 
+  geom_abline(intercept = coef(mod1)[1], slope = coef(mod1)[2],  color = "dodgerblue") + 
+  theme_minimal()
+```
+
+    mod1 線性回歸結果：斜率 = 0.48590, y 截距 = 0.37413
+    從 p_value 與結果可以得知該回歸通過 alpha = 0.001 的顯著檢定
+    從 R^2 可以得知該回歸僅能解釋約 11% 的變異
+    兩者的相關係數為 0.33
+
+```{r message=FALSE, warning=FALSE}
+# Perc_agree vs. pop_density
+mod2 <- lm(formula = perc_agree ~ population_density, data = join_pop)
+summary(mod2); cor.test(join_pop$perc_agree, join_pop$population_density)
+
+plt2 <- ggplot(data = join_pop, aes(x = population_density, y = perc_agree)) + 
+  geom_point() + 
+  geom_smooth(method = 'lm', se = FALSE, color = "dodgerblue") +
+  scale_x_log10() +
+  theme_minimal()
+```
+
+    mod2 線性回歸結果：斜率 = -3.329e-06, y 截距 = 7.295e-01
+    從 p_value 與結果可以得知該回歸通過 alpha = 0.001 的顯著檢定
+    從 R^2 可以得知該回歸能解釋約 30% 的變異
+    兩者的相關係數為 -0.55
+    
+```{r message=FALSE, warning=FALSE}
+library(gridExtra)
+
+grid.arrange(plt1, plt2, ncol=2)
+```
+  
+
+# Q4 Challenge: The median of grouped data
+- Calculating age median of grouped data
+- Reference: https://www.themathdoctors.org/finding-the-median-of-grouped-data/
+- Solve it with dplyr pkgs
+- If you can't answer the question correctly, keep your code (even wrong) to get partial scores.
+
+## **Q4 Ans: glimpse()**
+```{r}
+# glimpse(YOUR_DATA_FRAME_NAME)
+age_town_tidy <- age_town %>%
+  gather(key = "key", "value", -site_id) %>%
+  mutate(key = str_replace(key, "15down", "0_14")) %>%
+  mutate(key = str_replace(key, "100up", "100_105")) %>%
+  mutate(key = str_replace(key, "single_age", "single")) %>%
+  separate(key, c("married", "ageLower", "ageUpper", "gender")) %>%
+  mutate(ageLower = as.numeric(ageLower),
+         ageUpper = as.numeric(ageUpper),
+         value = as.numeric(value))
+
+glimpse(age_town_tidy)
+  
+age_town_group <- age_town_tidy %>%
+  group_by(site_id, ageLower) %>%
+  summarise(value = sum(value))
+
+# 找出中位數所在區間
+index <- function(val) {
+  sum = 0
+  for (i in 1:length(val)) {
+    sum = sum + val[i]
+    if (sum >= sum(val)/2) {
+      return (i)
+      break
+    }
+  }
+}
+
+# 找出 median_group 必要參數並計算
+group_median <- function(val, w = 5) {
+  ind = index(val)
+  L = df$ageLower[ind]
+  B = sum(df$value[1:(ind-1)])
+  n = sum(val)
+  G = df$value[ind]
+  
+  median = L + ((n/2) - B)/G * w
+  return(median)
+}
+
+# 對每個行政區套用 median_group
+median <- vector()
+
+for (site in age_town$site_id) {
+  df <- filter(age_town_group, site_id == site)
+  val <- df$value
+  tmp <- group_median(val)
+  median <- c(median, tmp)
+}
+
+result.df = data.frame(site_id = age_town$site_id, median = median)
+result.df
+```
+
