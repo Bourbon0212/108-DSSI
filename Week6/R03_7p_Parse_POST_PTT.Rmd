@@ -1,0 +1,112 @@
+---
+title: "R03_7 Parse POST PTT"
+author: "龔泓愷"
+date: "2019/10/20"
+output:
+  html_document:
+    highlight: zenburn
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+editor_options:
+  chunk_output_type: inline
+---
+
+# loading packages
+```{r library, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(httr)
+library(rvest)
+library(lubridate)
+options(stringsAsFactors = F)
+```
+
+
+
+# Loading post list with links
+```{r}
+# Reading post link rds -> posts
+posts <- readRDS("post_HatePolitics_lin.rds")
+```
+
+
+# Getting one post for examining html structure
+```{r}
+# WLOG, getting the first post link as an example, assign to -> url
+url <- posts$link[1]
+
+# Getting back the article and parsing as html
+# Remember to send cookie
+doc <- GET(url, config = set_cookies("over18" = "1")) %>%
+  content("text") %>%
+  read_html()
+
+# Verifying the doc by write_html() and browseURL()
+doc %>% write_html("test_7p.html")
+browseURL("test_7p.html")
+```
+
+
+# Parse one POST
+```{r}
+# Getting content by CSS selector
+nodes <- html_nodes(doc, "#main-content")
+
+# BETTER for the case, Getting content by XPath
+nodes_xpath <- html_nodes(doc, xpath = '//*[@id="main-content"]')
+
+# Getting metadata
+url <- url
+
+ptitle <- html_node(nodes, "div:nth-child(3) > span.article-meta-value") %>% html_text(); ptitle
+
+pcontent <- doc %>% html_text() %>%
+  gsub(pattern = "\n", ., replacement = "") %>% # 清理斷行符號
+  gsub(pattern = "--.+", ., replacement = "") %>% # 去尾
+  gsub(pattern = "作者.+:[0-9]{2}\\s[0-9]{4}", ., replacement = "") # 去頭
+pcontent
+
+pauthor <- html_node(nodes, "div:nth-child(1) > span.article-meta-value") %>% html_text(); pauthor
+
+ptime <- html_node(nodes, "div:nth-child(4) > span.article-meta-value") %>% html_text(); ptime
+
+# Combining data to a data frame
+# post.temp <- data_frame(url, pcontent, ptitle, pauthor, ptime)
+post.temp <- data.frame(url, pcontent, ptitle, pauthor, ptime)
+```
+
+
+# Using for-loop to get all posts
+```{r}
+# Create an empty data frame -> all_posts
+all_posts <- data.frame()
+
+# for-loop
+for (url in posts$link) {
+  doc <- GET(url, config = set_cookies("over18" = "1")) %>%
+    content("text") %>%
+    read_html()
+  nodes <- html_nodes(doc, "#main-content")
+  
+  ptitle <- html_node(nodes, "div:nth-child(3) > span.article-meta-value") %>% html_text()
+  pcontent <- doc %>% html_text() %>%
+    gsub(pattern = "\n", ., replacement = "") %>%
+    gsub(pattern = "--.+", ., replacement = "") %>%
+    gsub(pattern = "作者.+:[0-9]{2}\\s[0-9]{4}", ., replacement = "")
+  pauthor <- html_node(nodes, "div:nth-child(1) > span.article-meta-value") %>% html_text()
+  ptime <- html_node(nodes, "div:nth-child(4) > span.article-meta-value") %>% html_text()
+  post.temp <- data.frame(url, pcontent, ptitle, pauthor, ptime)
+  
+  all_posts <- rbind(all_posts, post.temp)
+}
+head(all_posts)
+```
+
+# Save posts
+```{r}
+# Getting current time for file name -> current_time
+current_time <- now() %>% format("%Y%m%d%H%M%S")
+
+# Converting data type and writing rds
+all_posts %>% write_rds(str_c(current_time, "_all_posts.rds"))
+```
