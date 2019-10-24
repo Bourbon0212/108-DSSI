@@ -1,0 +1,155 @@
+---
+title: "AS5_B06208001"
+author: "B06208001 龔泓愷"
+date: "2019/10/24"
+output: html_document
+---
+
+# LTN Crawler
+
+```{r library, warning=FALSE, message=FALSE}
+library(httr)
+library(rvest)
+library(tidyverse)
+library(lubridate)
+options(stringsAsFactors = F)
+```
+
+## Links Crawler Design
+
+```{r crawler, eval=FALSE}
+# Crawler Design
+url <- "https://news.ltn.com.tw/search?keyword=蔡英文&conditions=and&start_time=2019-08-01&end_time=2019-10-31&page=1"
+
+doc <- read_html(url)
+nodes <- html_nodes(doc, ".searchlist")
+
+title <- html_nodes(nodes, "li a") %>% html_text()
+time <- html_nodes(nodes, "li span") %>% html_text()
+year <- str_sub(time, 1, 4)
+link <- html_nodes(nodes, "li a") %>% html_attr("href")
+
+link.tmp <- data.frame(year = year,
+                   title = title,
+                   link = link,
+                   time = time)
+
+# Wrap into loops
+# Initial the empty data.frame to store the links
+link.df <- data.frame(year = character(), title = character(), link = character(), time = character())
+
+for (year in 2005:2019) {
+  year.query = year
+  for (month in sprintf("%02d", seq(1, 12, 1))) {
+    month.query = month
+  
+    # Query by month
+    start = str_c(year.query, "-", month.query, "-01")
+    end = str_c(year.query, "-", month.query, "-31")
+    page = 1
+  
+    while (TRUE) {
+      url <- str_c("https://news.ltn.com.tw/search?keyword=蔡英文&conditions=and&start_time=", start, "&end_time=", end, "&page=", page)
+      print(url)
+      doc <- read_html(url)
+      nodes <- html_nodes(doc, ".searchlist")
+      title <- html_nodes(nodes, "li a") %>% html_text()
+    
+      # Check for last pages
+      if (length(title) == 0) {
+        break
+      }
+    
+      time <- html_nodes(nodes, "li span") %>% html_text()
+      year <- str_sub(time, 1, 4)
+      link <- html_nodes(nodes, "li a") %>% html_attr("href")
+      
+      page <- page + 1
+      
+      link.temp <- data.frame(year = year,
+                              title = title,
+                              link = link,
+                              time = time)
+      link.df <- rbind(link.df, link.temp)
+    }
+  }
+}
+
+# Remove those duplicate news due to monthly query
+link.df <- unique(link.df)
+
+saveRDS(link.df, "link.rds")
+```
+
+```{r}
+links <- read_rds("link.rds")
+links["category"] <- str_match(links$link, pattern = ".+\\/news\\/(\\w+)")[,2]
+links["time"] <- case_when(nchar(links$time) == 10 ~ str_c(links$time, " 00:00"),
+                           TRUE ~ links$time)
+links["time"] <- ymd_hm(links$time)
+
+glimpse(links)
+```
+
+## News Crawler Design
+
+```{r news crawl,eval = FALSE}
+# Latest 100 news
+links.desc <- links %>%
+  arrange(desc(time))
+links.100 <- links.desc[1:100,]
+
+# See the category of links.100
+unique(links.100$category)
+
+# Initial the empty data.frame to store the news contents
+news.df <- data.frame(year = character(), title = character(), category = character(), content = character())
+
+for (row in 1: nrow(links.100)) {
+  url <- links.100$link[row]
+  
+  year <- links.100$year[row]
+  title <- links.100$title[row]
+  category <- links.100$category[row]
+  
+  query <- case_when(
+    category == "opinion" ~ ".cont",
+    category == "entertainment" ~ ".news_content p",
+    category == "sports" ~ ".news_p p",
+    TRUE ~ ".text p"
+  )
+
+  content <- read_html(url) %>% 
+    html_nodes(query) %>% html_text() %>% paste0(collapse = "")
+  
+  news.temp <- data.frame(year = year, title = title, category = category, content = content)
+
+  news.df <- rbind(news.df, news.temp)
+}
+
+saveRDS(news.df, "news.rds")
+```
+
+## Result
+
+### Links Result
+```{r links result, warning=FALSE}
+head(links, n = 100) %>%
+    knitr::kable(align = 'c') %>%
+    kableExtra::kable_styling(bootstrap_options = "striped", full_width = F)
+```
+
+### News Result
+```{r newss result, warning=FALSE}
+news <- read_rds("news.rds")
+
+head(news, n = 100) %>%
+    knitr::kable(align = 'c') %>%
+    kableExtra::kable_styling(bootstrap_options = "striped", full_width = F)
+```
+
+### Save to `rda`
+```{r}
+save(links, news, file = "ltn_tsai.rda")
+```
+
