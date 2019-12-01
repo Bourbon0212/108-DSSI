@@ -202,6 +202,6 @@ result %>%
   kableExtra::kable_styling(bootstrap_options = "striped", full_width = T)
 ```
 
-1. 從前面各種模型結果來看，大部分的模型都有約 6 成左右的 Accuracy 。
+1. 從前面各種模型結果來看，大部分的模型都有約 6 成左右的 Accuracy ，其中以 RandomForest 最高。
 2. 大部分的模型都傾向於預測為 "H" ，或許與經特徵篩選後， "H" 資料較 "L" 來得多有關。
 3. 加入 Precision ,  Recall , 或是綜合指標 F1Score ，應有助於選出最合適的模型。
