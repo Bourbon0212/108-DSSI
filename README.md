@@ -22,3 +22,9 @@
 ### Week7
 * AS05: [HTML: LTN News Crawler](https://bourbon0212.github.io/108-DSSI/Week7/AS5_B06208001.html)
 * PR07: [Regular Expression](https://bourbon0212.github.io/108-DSSI/Week7/R05_1p_regular_expression.html)
+
+### Week10
+* AS06: [Clickbaits Feature Selection](https://bourbon0212.github.io/108-DSSI/Week10/Feature-Select.html)
+
+### Week11
+* AS07: [Clickbaits Detecting Model](https://bourbon0212.github.io/108-DSSI/Week11/AS-7-Detecting-clickbaits.html)
