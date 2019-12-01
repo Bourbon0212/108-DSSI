@@ -1,0 +1,127 @@
+---
+title: "AS#6 Feature Select"
+author: "b06208001 龔泓愷"
+date: "2019/11/20"
+output: html_document
+---
+
+### Pre-Process
+```{r pre-process, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(jiebaR)
+
+# Read in data
+data = read_csv("a.csv")
+head(data)
+
+# Initialize jieba cutter
+tagger = worker("tag")
+segment_not = c("韓國瑜", "吳蕚洋", "柯文哲", "葛特曼", "黃偉哲", "蔣萬安", "段宜康", "高思博", "侯友宜", "吳瓊華", "蔡英文", "韓粉", "吳崢", "高嘉瑜", "林智堅", "李來希", "伍佰", "林佳龍", "高捷", "盛竹如", "姚文智", "林濁水", "朱學恆")
+new_user_word(tagger, segment_not)
+
+# Word segmentation
+data.ws = data %>%
+    mutate(word = purrr::map(title, function(x)segment(x, tagger))) %>%  
+    mutate(word = purrr::map(word, function(x)str_c(names(x), "_", x))) %>%
+    unnest(word) %>%
+    separate(word, c("pos", "word"), sep = "_") %>%
+    filter(!str_detect(word, "[a-zA-Z0-9\\s]+"))
+```
+
+### Feature Selection
+
+```{r}
+# 最高級
+superlative = str_detect(data$title, "最")
+# 強調
+emphasize = str_detect(data$title, "「")
+# 引用
+quote = str_detect(data$title, "(「.+」)*.+：(「.+」)*")
+# 疑問
+question = str_detect(data$title, "？")
+# 違背預期
+exception = str_detect(data$title, "[(居然)竟卻才只還而]")
+# 刪節號
+ellipsis = str_detect(data$title, "‧‧‧")
+# 否定
+negation = str_detect(data$title, "[^：][不]")
+# 條列
+list = str_detect(data$title, "[0-9]+[件(政見)大]")
+# 數量單位
+quantative = str_detect(data$title, "[0-9]+[輛個(政見)死件萬千字公(微克)張分選女男(鄉代)%人條種日天大]")
+# 加強
+strengthen = str_detect(data$title, "[！超最很(非常)]")
+```
+
+#### List
+
+挑出標題中帶有條列用法的文章，可能吸引閱聽人點入。
+
+```{r}
+head(data$title[list])
+head(data$title[!list])
+cat(paste0("具有條列用法標題的平均誘餌指數：", round(mean(data$`how clickbait this title is`[list]), 2), " ; 不具有條列用法標題的平均誘餌指數：", round(mean(data$`how clickbait this title is`[!list]), 2)))
+```
+
+#### Strengthen
+
+挑出標題中具有加強語氣的文章，包含使用驚嘆號，誇飾描述的副詞等。
+
+```{r}
+head(data$title[strengthen])
+head(data$title[!strengthen])
+cat(paste0("具有加強用法標題的平均誘餌指數：", round(mean(data$`how clickbait this title is`[strengthen]), 2), " ; 不具有加強用法標題的平均誘餌指數：", round(mean(data$`how clickbait this title is`[!strengthen]), 2)))
+```
+
+#### Quote
+
+挑出標題中具有引用的文章，包含使用引號、冒號等。
+
+```{r}
+head(data$title[quote])
+head(data$title[!quote])
+cat(paste0("具有引用用法標題的平均誘餌指數：", round(mean(data$`how clickbait this title is`[quote]), 2), " ; 不具有引用用法標題的平均誘餌指數：", round(mean(data$`how clickbait this title is`[!quote]), 2)))
+```
+
+### Word Segmentation & Part of Speech
+
+#### Level1
+```{r}
+bait1 = data.ws %>%
+  filter(`how clickbait this title is` == 1)
+bait1.ws = summary(factor(bait1$word)); bait1.ws[bait1.ws > 2]
+bait1.pos = summary(factor(bait1$pos)); sort(bait1.pos[bait1.pos > median(bait1.pos)], decreasing = T)
+```
+
+#### Level2
+```{r}
+bait2 = data.ws %>%
+  filter(`how clickbait this title is` == 2)
+bait2.ws = summary(factor(bait2$word)); bait2.ws[bait2.ws > 2]
+bait2.pos = summary(factor(bait2$pos)); sort(bait2.pos[bait2.pos > median(bait2.pos)], decreasing = T)
+```
+
+#### Level3
+```{r}
+bait3 = data.ws %>%
+  filter(`how clickbait this title is` == 3)
+bait3.ws = summary(factor(bait3$word)); bait3.ws[bait3.ws > 2]
+bait3.pos = summary(factor(bait3$pos)); sort(bait3.pos[bait3.pos > median(bait3.pos)], decreasing = T)
+```
+
+#### Level4
+```{r}
+bait4 = data.ws %>%
+  filter(`how clickbait this title is` == 4)
+bait4.ws = summary(factor(bait4$word)); bait4.ws
+bait4.pos = summary(factor(bait4$pos)); sort(bait4.pos[bait4.pos > median(bait4.pos)], decreasing = T)
+```
+
+#### Level5
+```{r}
+bait5 = data.ws %>%
+  filter(`how clickbait this title is` == 5)
+bait5.ws = summary(factor(bait5$word)); bait5.ws
+bait5.pos = summary(factor(bait5$pos)); sort(bait5.pos[bait5.pos > median(bait5.pos)], decreasing = T)
+```
+

@@ -1,0 +1,207 @@
+---
+title: "AS#7 Detecting clickbaits"
+author: "b06208001 龔泓愷"
+date: "2019/11/30"
+output: html_document
+---
+
+### Pre-process
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(jiebaR)
+
+setwd("E:/OneDrive - g.ntu.edu.tw/Documents/108-I/資料科學與社會研究/Week11")
+```
+```{r preprocess, message=FALSE, warning=FALSE}
+data <- read_csv("data/clickbait_labelled.csv")
+data <- data %>%
+  rowwise() %>% # Row execution
+  mutate(score = mean(c(X4, X5, X6), na.rm = T)) %>%
+  select(-c(X4, X5, X6))
+
+stopWords <- readRDS("data/stopWords.rds")
+segment_not <- c("第卅六條", "第卅八條", "蘇南成", "災前", "災後", "莫拉克", "颱風", "應變中心", "停班停課", "停課", "停班", "停駛", "路樹", "里長", "賀伯", "採收", "菜價", "蘇迪", "受災戶", "颱風警報", "韋恩", "台東縣", "馬總統", "豪大雨", "梅姬", "台東", "台北市政府", "工務段", "漂流木", "陳菊", "台南縣", "卡玫基", "魚塭", "救助金", "陳情", "全省", "強颱", "中颱", "輕颱", "小林村", "野溪", "蚵民", "農委會", "來襲", "中油公司", "蔣總統經國", "颱風天", "土石流", "蘇迪勒", "水利署", "陳說", "颱風假", "颱風地區", "台灣", "臺灣", "柯羅莎", "八八風災", "紓困","傅崑萁", "傅崐萁","台中", "文旦柚", "鄉鎮市公所", "鄉鎮市", "房屋稅", "高雄", "未達", "台灣省", "台北市", "蔡英文", "韓國瑜", "吳蕚洋", "柯文哲", "葛特曼", "黃偉哲", "蔣萬安", "段宜康", "高思博", "侯友宜", "吳瓊華", "韓粉", "吳崢", "高嘉瑜", "林智堅", "李來希", "伍佰", "林佳龍", "高捷", "盛竹如", "姚文智", "林濁水", "朱學恆", stopWords$word)
+
+# Initialize jieba cutter
+cutter <- worker()
+# Add segment_not into user defined dictionary to avoid being cutted
+new_user_word(cutter, segment_not)
+
+data.ws <- data %>%
+  mutate(word = purrr::map(title, function(x) segment(x, cutter))) %>%
+  unnest(word) %>%
+  filter(!str_detect(word, "[a-zA-Z0-9\\s]+")) %>%
+  select(c(ID, word, score)) %>%
+  group_by(word) %>%
+  summarize(n = n(), score = mean(score)) %>%
+  filter(n > 2)
+
+data.ws %>%
+  arrange(desc(n)) %>%
+  head(10) %>%
+  knitr::kable(align = 'c') %>%
+  kableExtra::kable_styling(bootstrap_options = "striped", full_width = T)
+```
+
+### Q1
+
+1. 將新聞標題字串分割後，累計相同的文字特徵，篩選出現頻率與「誘餌分數」較高的詞彙作為「誘餌詞彙」
+2. 根據各「誘餌詞彙」出現在各新聞標題比例與該新聞的「誘餌分數」進行線性回歸
+
+```{r}
+word_bait <- filter(data.ws, score >= 3)$word; head(word_bait, 50)
+
+# Calculate the proportion of bait words
+data.wb <- data %>%
+  mutate(word = purrr::map(title, function(x) segment(x, cutter))) %>%
+  unnest(word) %>%
+  filter(!str_detect(word, "[a-zA-Z0-9\\s]+")) %>%
+  mutate(wordBait = if_else(word %in% word_bait, T, F)) %>%
+  group_by(ID) %>%
+  summarise(title = unique(title), bait = mean(wordBait), score = unique(score))
+
+data.wb %>%
+  head(10) %>%
+  knitr::kable(align = 'c') %>%
+  kableExtra::kable_styling(bootstrap_options = "striped", full_width = T)
+
+# Linear Regression
+mod <- lm(formula = score ~ bait, data = data.wb)
+summary(mod); cor.test(data.wb$bait, data.wb$score)
+```
+    
+1. 線性回歸結果：斜率 = 4.12250, y 截距 = 1.75685
+2. 從 R^2 可以得知該回歸僅能解釋約 43% 的變異
+2. 兩者的相關係數為 0.6565
+    
+```{r}
+ggplot(data = data.wb, aes(x = bait, y = score)) + 
+  geom_jitter(alpha = 0.3) + 
+  geom_smooth(method = 'lm', se = FALSE, color = "dodgerblue") +
+  theme_minimal()
+```
+
+***
+
+### Q2
+
+1. 將誘餌分數高於 2.5 分的歸類為"H"，意即其為誘餌式標題
+2. 將誘餌分數低於 2.5 分的歸類為"L"，意即其非誘餌式標題
+3. 使用課程教學影片中提及的模型作為機器學習模型
+
+```{r, message=FALSE, warning=FALSE}
+# Feature Selection & Word Count
+data.wc <- data %>%
+  mutate(word = purrr::map(title, function(x) segment(x, cutter))) %>%
+  unnest(word) %>%
+  filter(!str_detect(word, "[a-zA-Z0-9\\s]+")) %>%
+  filter(word %in% word_bait) %>%
+  select(c(ID, word)) %>%
+  count(ID, word)
+
+data.lv <- data %>%
+  mutate(bait = case_when(score >= 2.5 ~ "H",
+                          score < 2.5 ~ "L")) %>%
+  select(c(ID, title, bait))
+data.lv["bait"] = as.factor(data.lv$bait)
+summary(data.lv$bait)
+
+# Document Term Matrix
+library(tidytext)
+dtm <- data.wc %>% 
+    cast_dtm(document = ID, term = word, value = n)
+
+mat.df <- as.matrix(dtm) %>% as_tibble() %>% 
+    bind_cols(ID = dtm$dimnames$Docs) %>%
+    left_join(data.lv %>%
+                  select(ID, bait)
+              )
+colnames(mat.df) <- make.names(colnames(mat.df)) # 調整欄位名稱，避免用到不可以用的字元，避免後續建model出錯
+
+# Dimension Reduction
+mat.pca <- prcomp(select(mat.df, -bait, -ID), center = T, scale. = F)
+plot(mat.pca, type = "l", n=30) # 選擇前 20 主成分
+mat.pca20 <- mat.pca$x[, 1:20] %>% as_tibble() %>%
+  bind_cols(mat.df %>% select(bait, ID))
+summary(mat.pca20$bait)
+
+# Train Test Split
+index <- sample(1:nrow(mat.df), ceiling(nrow(mat.df) * .70))
+
+train.df <- select(mat.pca20[index, ], -ID)
+test.df <- select(mat.pca20[-index, ], -ID)
+summary(train.df$bait)
+summary(test.df$bait)
+
+result <- test.df %>%
+  mutate(ID = mat.pca20[-index, ]$ID) %>%
+  inner_join(data, by = "ID") %>%
+  select(ID, title, bait)
+
+# Multi-nomial Modeling
+library(nnet)
+
+stime <- Sys.time()
+fit_mnl <- multinom(bait ~ ., 
+                    data = train.df,
+                    MaxNWts = 5000)
+ttime <- Sys.time(); str_c("t(training): ", ttime - stime)
+
+result$mnl <- predict(fit_mnl, newdata = test.df, "class")
+str_c("t(predicting): ", Sys.time() - ttime)
+
+(conf.mat <- table(result$mnl, result$bait))
+(accuracy <- sum(diag(conf.mat))/sum(conf.mat) * 100)
+
+# RandomForest Modeling
+library(randomForest)
+
+stime <- Sys.time()
+fit_rf <- randomForest(bait ~ .,
+                       data = train.df)
+ttime <- Sys.time(); str_c("t(training): ", ttime - stime)
+
+result$rf <- predict(fit_rf, newdata = test.df, "class")
+str_c("t(predicting): ", Sys.time() - ttime)
+
+(conf.mat <- table(result$rf, result$bait))
+(accuracy <- sum(diag(conf.mat))/sum(conf.mat) * 100)
+
+# Naive Bayes
+library(e1071)
+
+stime <- Sys.time()
+fit_nb <- naiveBayes(bait ~ ., data = train.df)
+ttime <- Sys.time(); str_c("t(training): ", ttime - stime)
+result$nb <- predict(fit_nb, newdata = test.df, "class")
+str_c("t(predicting): ", Sys.time() - ttime)
+
+(conf.mat <- table(result$nb, result$bait))
+(accuracy <- sum(diag(conf.mat))/sum(conf.mat) * 100)
+
+# SVM Modeling
+stime <- Sys.time()
+fit_svm <- svm(bait ~ ., 
+               data = train.df, 
+               method = "C-classification", 
+               kernal = "radial", 
+               gamma = 0.1, cost = 10)
+ttime <- Sys.time(); str_c("t(training): ", ttime - stime)
+
+result$svm <- predict(fit_svm, newdata = test.df)
+str_c("t(predicting): ", Sys.time() - ttime)
+
+(conf.mat <- table(result$svm, result$bait))
+(accuracy <- sum(diag(conf.mat))/sum(conf.mat) * 100)
+
+# Result Evaluation
+result %>%
+  head(20) %>%
+  knitr::kable(align = 'c') %>%
+  kableExtra::kable_styling(bootstrap_options = "striped", full_width = T)
+```
+
+1. 從前面各種模型結果來看，大部分的模型都有約 6 成左右的 Accuracy 。
+2. 大部分的模型都傾向於預測為 "H" ，或許與經特徵篩選後， "H" 資料較 "L" 來得多有關。
+3. 加入 Precision ,  Recall , 或是綜合指標 F1Score ，應有助於選出最合適的模型。
