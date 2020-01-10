@@ -28,3 +28,10 @@
 
 ### Week11
 * AS07: [Clickbaits Detecting Model](https://bourbon0212.github.io/108-DSSI/Week11/AS-7-Detecting-clickbaits.html)
+
+### Week12
+* AS08: [Categorizing Sentences](https://bourbon0212.github.io/108-DSSI/Week12/AS8-Categorizing-Sentences.html)
+
+### Final Project
+* Reference: [RCEC-Intern2019](https://github.com/Bourbon0212/RCEC-Intern2019)
+* Final Report: [台灣歷史測站資料時空分群](https://github.com/Bourbon0212/108-DSSI/blob/master/Final/DSSI_Final.pdf)
