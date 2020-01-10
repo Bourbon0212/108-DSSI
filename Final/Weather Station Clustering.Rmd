@@ -1,0 +1,328 @@
+---
+title: "Weather Station Clustering"
+author: "Bourbon0212"
+date: "2019/12/18"
+output: html_document
+---
+
+```{r setup, warning=FALSE, message=FALSE}
+setwd("E:/OneDrive - g.ntu.edu.tw/Documents/108-I/資料科學與社會研究/Final")
+library(tidyverse); library(ggplot2); library(gridExtra)
+library(factoextra); library(ggfortify); library(ggmap)
+library(ggrepel); library(cluster)
+```
+
+## Spatial Clustering (2010 ~ 2018, 局屬、地面、自動測站)
+
+```{r spatial, warning=FALSE, message=FALSE, eval=FALSE}
+### 迴圈跑起來，算歷年月平均
+month = sprintf("%02d", seq(1, 12, 1)) 
+data = read_csv("Data/PP01/201001_cwb_PP01.csv")
+df = as.data.frame(data[,1])
+
+for (i in c(1:length(month))) {
+  
+  for (j in c(2010:2018)) {
+    
+    data = read_csv(paste0("Data/PP01+/", j, month[i],"_cwb_PP01.csv"))
+    
+    print(paste(i, j))
+    
+    data[, 2:length(data)] = sapply(data[, 2:length(data)], as.character)
+    data[, 2:length(data)] = sapply(data[, 2:length(data)], as.numeric)
+    
+    data[data == -9991] = NA #儀器故障待修
+    data[data == -9997] = NA #不明原因或故障無資料
+    data[data == -9998] = 0  #雨跡(<0.1 mm)
+    data[data == -9999] = NA #未觀測
+    data[data == "X"] = NA #未觀測
+    data[data == "/"] = NA
+    data[data == "..."] = NA
+    
+    result = as.data.frame(data[,1])
+    index = c(2:ncol(data))
+    result[,2] = apply(data[,index], 1, function (x) round(mean(x, na.rm = T), 2))
+    
+    df = full_join(df, result, by = "stno")
+    df = df[complete.cases(df), ] # 移除計算後為 NA 之測站
+  }
+  
+  colnames(df) = c("stno", c(2010:2018))
+  write.csv(df, paste0(month.abb[i],"_PP01.csv"))
+  df = as.data.frame(data[,1])
+  
+}
+
+### 迴圈跑起來，算歷年平均的平均
+df = read.csv("station.csv")
+
+for (i in month.abb) {
+  data = read_csv(paste0("Done/", i, "_PP01.csv"))
+  result = as.data.frame(data[,2])
+  index = c(3:ncol(data))
+  #print(apply(data[,index], 1, function (x) round(mean(x, na.rm = T), 2)))
+  result[,2] = apply(data[,index], 1, function (x) round(mean(x, na.rm = T), 2))
+  df = inner_join(df, result, by = "stno")
+}
+colnames(df) = c("stno", "name", "Lon", "Lat", month.abb)
+write.csv(df, "PP01_Loc_cluster.csv") # 輸出後手動刪除重複的
+```
+```{r spatial_analysis, message=FALSE}
+### PCA 分群起來
+data = read.csv("PP01_Loc_cluster.csv")
+
+#PCA & K-means Cluster
+data.pca = prcomp(data[6:17])
+
+#Average Silhouette Method
+set.seed(1)
+data.k = kmeans(data[6:17], centers = 6)
+data["cluster"] = factor(data.k[["cluster"]])
+ss <- silhouette(data.k$cluster, dist(data[6:17]))
+Si_6 = mean(ss[,3])
+
+set.seed(1)
+data.k = kmeans(data[6:17], centers = 5)
+data["cluster"] = factor(data.k[["cluster"]])
+ss <- silhouette(data.k$cluster, dist(data[6:17]))
+Si_5 = mean(ss[,3])
+
+set.seed(1)
+data.k = kmeans(data[6:17], centers = 4)
+data["cluster"] = factor(data.k[["cluster"]])
+ss <- silhouette(data.k$cluster, dist(data[6:17]))
+Si_4 = mean(ss[,3])
+
+paste("Average Silhouette scores for 4, 5, 6 clusters are", Si_4, Si_5, Si_6, ", respectively.")
+
+#Optimal Cluster Plot
+plot1 = fviz_nbclust(data[6:17], 
+                     FUNcluster = kmeans,# K-Means
+                     method = "wss",     # total within sum of square
+) + geom_vline(xintercept = 4, linetype = 2) + theme_minimal()
+
+#Scree Plot
+plot2 = fviz_eig(data.pca)
+
+grid.arrange(plot1, plot2, ncol=2)
+
+#PCA factor
+PC1_factor = abs(data.pca$rotation[,1])
+sort(PC1_factor, decreasing = T)[1:5]
+PC2_factor = abs(data.pca$rotation[,2])
+sort(PC2_factor, decreasing = T)[1:5]
+
+#Bi Plot
+plot3 = fviz_pca_biplot(data.pca, geom.ind = "point")
+
+#Cluster Plot
+plot4 = autoplot(data.k, data = data[6:17], frame = T) +
+        theme_minimal()
+
+grid.arrange(plot3, plot4, ncol=2)
+
+#Map
+tw <- c(118.2, 21.5, 122.5, 26.4)
+Map <- get_stamenmap(tw, zoom = 8, source = "stamen", maptype = "toner-lite")
+
+ggmap(Map, darken = c(0.5, "white")) +
+      geom_point(data = data, aes(x = Lon, y = Lat, col = cluster), size = 3, alpha = 0.4, pch = 16)
+```
+
+## Temporal Clustering (2010 ~ 2018, 局屬、地面測站)
+
+```{r temporal, warning=FALSE, message=FALSE, eval=F}
+### 日資料平均起來
+month = sprintf("%02d", seq(1, 12, 1)) #產出01,02,...12的數列
+month.d = c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) #每個月分的天數，忽略閏年29號
+
+ret = data.frame(day = c(1:365)) #生成dataframe容納產出的逐日資料
+
+for (i in 2010:2018) {
+  result = c()
+  for (j in 1:length(month)) {
+    read = paste0("Data/TX01/", i, month[j], "_cwb_TX01.csv")
+    print(read)
+    data = read.csv(read)
+    data[, 2:length(data)] = sapply(data[, 2:length(data)], as.character)
+    data[, 2:length(data)] = sapply(data[, 2:length(data)], as.numeric)
+    
+    # data.f = filter(data, data$stno %in% cluster_4) #篩選分群
+    data.f = data
+    data.f[data.f == -9991] = NA #儀器故障待修
+    data.f[data.f == -9997] = NA #不明原因或故障無資料
+    data.f[data.f == -9998] = 0  #雨跡(<0.1 mm)
+    data.f[data.f == -9999] = NA #未觀測
+    data.f[data.f == "X"] = NA
+    data.f[data.f == "/"] = NA
+    data.f[data.f == "..."] = NA
+    
+    #逐日平均，註：註月平均再一層mean()
+    mean = apply(data.f[,2:(month.d[j] + 1)], 2, function (x) round(mean(x, na.rm = T), 2))
+    result = c(result, mean)
+  }
+  print(as.character(i))
+  ret[as.character(i)] = result
+}
+write.csv(ret, "Daily_cwb_all_TX01.csv", row.names = F)
+
+### Standardize
+dt = read.csv("Daily_cwb_all_all.csv")
+
+dt["PP01"] = (dt$PP01 - mean(dt$PP01)) / sd(dt$PP01)
+dt["PS01"] = (dt$PS01 - mean(dt$PS01)) / sd(dt$PS01)
+dt["TX01"] = (dt$TX01 - mean(dt$TX01)) / sd(dt$TX01)
+dt["WD_u"] = (dt$WD_u - mean(dt$WD_u)) / sd(dt$WD_u)
+dt["WD_v"] = (dt$WD_v - mean(dt$WD_v)) / sd(dt$WD_v)
+
+write.csv(dt, "sdDaily_cwb_all_all.csv", row.names = F)
+```
+```{r temporal_analysis}
+### Main
+sddt = read.csv("sdDaily_cwb_all_all.csv")
+sddt["day"] = as.Date(sddt$day, origin = as.Date("2017-12-31"))
+
+#PCA & K-means Cluster
+data.pca = prcomp(sddt[2:6])
+set.seed(1)
+data.k = kmeans(sddt[2:6], centers = 5, iter.max = 100)
+sddt["cluster"] = factor(data.k[["cluster"]])
+
+#PCA factor
+PC1_factor = abs(data.pca$rotation[,1])
+sort(PC1_factor, decreasing = T)[1:3]
+PC2_factor = abs(data.pca$rotation[,2])
+sort(PC2_factor, decreasing = T)[1:3]
+
+#Optimal Cluster Plot
+plot1 = fviz_nbclust(sddt[2:6], 
+                     FUNcluster = kmeans,# K-Means
+                     method = "wss",     # total within sum of square
+        ) + geom_vline(xintercept = 5, linetype = 2) + theme_minimal()
+
+#Scree Plot
+plot2 = fviz_eig(data.pca)
+
+grid.arrange(plot1, plot2, ncol=2)
+
+#Bi Plot
+plot3 = fviz_pca_biplot(data.pca, geom.ind = "point")
+
+#Cluster Plot
+plot4 = autoplot(data.k, data = sddt[2:6], frame = T) +
+        theme_minimal()
+
+grid.arrange(plot3, plot4, ncol=2)
+
+#Visual
+plot5 = ggplot(data = sddt) +
+        geom_col(aes(x = day, y = PP01, fill = "PP01(mm)")) +
+        geom_point(aes(x = day, col = cluster), y = 0, pch = 15, size = 1.5) +
+        scale_color_manual(name = "", values = c("#F8766D", "#A3A500", "#00BF7D", "#00B0F6", "#E76BF3"), breaks = "", labels = "") +
+        scale_fill_manual(name = "", values = c("PP01(mm)"="#ADD8E666")) +
+        scale_x_date(date_breaks = "1 month", date_labels = "%B", expand = c(0,0)) +
+        ylab("z-score") + ggtitle("Daily Clustering by K-means") +
+        theme_minimal() +
+        theme(axis.title.x = element_blank(),
+              axis.text.x = element_blank())
+
+plot6 = ggplot(data = sddt) +
+        geom_col(aes(x = day, y = PS01, fill = "PS01(hPa)")) +
+        geom_col(aes(x = day, y = TX01, fill = "TX01(C)")) +
+        geom_point(aes(x = day, col = cluster), y = 0, pch = 15, size = 1.5) +
+        scale_color_manual(name = "", values = c("#F8766D", "#A3A500", "#00BF7D", "#00B0F6", "#E76BF3"), breaks = "", labels = "") +
+        scale_fill_manual(name = "", values = c("PS01(hPa)"="#ADFF2F44", "TX01(C)"="#FF8C0044")) +
+        scale_x_date(date_breaks = "1 month", date_labels = "%B", expand = c(0,0)) +
+        ylab("z-score") +
+        theme_minimal() +
+        theme(axis.title.x = element_blank(),
+              axis.text.x = element_blank())
+
+plot7 = ggplot(data = sddt) +
+        geom_col(aes(x = day, y = WD_u, fill = "E - W(m/s)")) +
+        geom_col(aes(x = day, y = WD_v, fill = "N - S(m/s)")) +
+        geom_point(aes(x = day, col = cluster), y = 0, pch = 15, size = 1.5) +
+        scale_color_manual(name = "", values = c("#F8766D", "#A3A500", "#00BF7D", "#00B0F6", "#E76BF3"), breaks = "", labels = "") +
+        scale_fill_manual(name = "", values = c("E - W(m/s)"="#DAA52044", "N - S(m/s)"="#EE82EE44")) +
+        scale_x_date(date_breaks = "1 month", date_labels = "%B", expand = c(0,0)) +
+        ylab("z-score") + xlab("Month") +
+        theme_minimal()
+
+grid.arrange(plot5, plot6, plot7, nrow=3)
+```
+
+## Temporal Clustering (1980 ~ 2018, 局屬測站)
+
+```{r temporal_analysis1}
+### Main
+sddt = read.csv("sdDaily_cwb_all_all_1980.csv")
+sddt["day"] = as.Date(sddt$day, origin = as.Date("2017-12-31"))
+
+#PCA & K-means Cluster
+data.pca = prcomp(sddt[2:6])
+set.seed(1)
+data.k = kmeans(sddt[2:6], centers = 5, iter.max = 100)
+sddt["cluster"] = factor(data.k[["cluster"]])
+
+#PCA factor
+PC1_factor = abs(data.pca$rotation[,1])
+sort(PC1_factor, decreasing = T)[1:3]
+PC2_factor = abs(data.pca$rotation[,2])
+sort(PC2_factor, decreasing = T)[1:3]
+
+#Optimal Cluster Plot
+plot1 = fviz_nbclust(sddt[2:6], 
+                     FUNcluster = kmeans,# K-Means
+                     method = "wss",     # total within sum of square
+        ) + geom_vline(xintercept = 5, linetype = 2) + theme_minimal()
+
+#Scree Plot
+plot2 = fviz_eig(data.pca)
+
+grid.arrange(plot1, plot2, ncol=2)
+
+#Bi Plot
+plot3 = fviz_pca_biplot(data.pca, geom.ind = "point")
+
+#Cluster Plot
+plot4 = autoplot(data.k, data = sddt[2:6], frame = T) +
+        theme_minimal()
+
+grid.arrange(plot3, plot4, ncol=2)
+
+#Visual
+plot5 = ggplot(data = sddt) +
+        geom_col(aes(x = day, y = PP01, fill = "PP01(mm)")) +
+        geom_point(aes(x = day, col = cluster), y = 0, pch = 15, size = 1.5) +
+        scale_color_manual(name = "", values = c("#F8766D", "#A3A500", "#00BF7D", "#00B0F6", "#E76BF3"), breaks = "", labels = "") +
+        scale_fill_manual(name = "", values = c("PP01(mm)"="#ADD8E666")) +
+        scale_x_date(date_breaks = "1 month", date_labels = "%B", expand = c(0,0)) +
+        ylab("z-score") + ggtitle("Daily Clustering by K-means") +
+        theme_minimal() +
+        theme(axis.title.x = element_blank(),
+              axis.text.x = element_blank())
+
+plot6 = ggplot(data = sddt) +
+        geom_col(aes(x = day, y = PS01, fill = "PS01(hPa)")) +
+        geom_col(aes(x = day, y = TX01, fill = "TX01(C)")) +
+        geom_point(aes(x = day, col = cluster), y = 0, pch = 15, size = 1.5) +
+        scale_color_manual(name = "", values = c("#F8766D", "#A3A500", "#00BF7D", "#00B0F6", "#E76BF3"), breaks = "", labels = "") +
+        scale_fill_manual(name = "", values = c("PS01(hPa)"="#ADFF2F44", "TX01(C)"="#FF8C0044")) +
+        scale_x_date(date_breaks = "1 month", date_labels = "%B", expand = c(0,0)) +
+        ylab("z-score") +
+        theme_minimal() +
+        theme(axis.title.x = element_blank(),
+              axis.text.x = element_blank())
+
+plot7 = ggplot(data = sddt) +
+        geom_col(aes(x = day, y = WD_u, fill = "E - W(m/s)")) +
+        geom_col(aes(x = day, y = WD_v, fill = "N - S(m/s)")) +
+        geom_point(aes(x = day, col = cluster), y = 0, pch = 15, size = 1.5) +
+        scale_color_manual(name = "", values = c("#F8766D", "#A3A500", "#00BF7D", "#00B0F6", "#E76BF3"), breaks = "", labels = "") +
+        scale_fill_manual(name = "", values = c("E - W(m/s)"="#DAA52044", "N - S(m/s)"="#EE82EE44")) +
+        scale_x_date(date_breaks = "1 month", date_labels = "%B", expand = c(0,0)) +
+        ylab("z-score") + xlab("Month") +
+        theme_minimal()
+
+grid.arrange(plot5, plot6, plot7, nrow=3)
+```

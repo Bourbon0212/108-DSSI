@@ -1,0 +1,408 @@
+---
+title: "AS#8 Categorizing Sentences"
+date: "2019/12/11"
+output: html_document
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(tidytext)
+library(e1071)
+library(glmnet)
+options(stringsAsFactors = F)
+```
+<br/>
+### Raw Data
+讀取trainset
+```{r}
+raw_1 <- read_csv("task1_trainset.csv") %>%
+  select(Id, Abstract, `Task 1`) %>%
+  mutate(sentence  = str_split(Abstract, "\\$+"),
+         sentence_type = str_split(`Task 1`, " ")) %>% 
+  unnest(sentence, sentence_type) %>%
+  select(doc_id = Id, sentence, sentence_type) %>%
+  group_by(doc_id) %>%
+  mutate(sentence_id = str_c(doc_id, "_S", str_pad(row_number(), 3, pad="0"))) %>%
+  mutate(sentence_perc = row_number()/n()) %>%
+  ungroup() %>%
+  mutate(index=TRUE)
+```
+<br/>
+讀取testset
+```{r}
+raw.test <- read_csv("task1_public_testset.csv") %>% 
+  mutate(sentence  = str_split(Abstract, "\\$+")) %>%
+  unnest(sentence) %>%
+  select(doc_id = Id, sentence) %>%
+  mutate(index = FALSE) %>% 
+  group_by(doc_id) %>%
+  mutate(sentence_id = str_c(doc_id, "_S", str_pad(row_number(), 3, pad="0"))) %>%
+  mutate(sentence_perc = row_number()/n()) %>%
+  ungroup()
+```
+<br/>
+combine
+```{r}
+raw <- raw_1 %>%
+  filter(str_detect(sentence_type, "/")) %>%
+  mutate(sentence_type = str_split(sentence_type, "/")) %>%
+  unnest(sentence_type) %>%
+  bind_rows(raw_1 %>% filter(!str_detect(sentence_type, "/"))) %>%
+  mutate(value = 1) %>%
+  spread(sentence_type, value, fill = 0) %>%
+  bind_rows(raw.test)
+```
+
+###sentence feature
+我們利用training data的sentence type，將每個字在不同type句子中出現的次數除以其總次數，給出五種類型的權重分數。<br/>
+再將每個句子中的單字的權重分數加總，獲得每個句子對應不同類別的分數。<br/>
+```{r}
+#unnest
+unnest.df <- raw %>%
+    select(sentence_id, sentence, sentence_perc, BACKGROUND, CONCLUSIONS, OBJECTIVES, METHODS, RESULTS, OTHERS) %>%
+    unnest_tokens(word, sentence, token = "regex", pattern = "[^A-Za-z\\d#@']") %>%
+    filter(!word %in% c("in", "a", "to", "and", "for", "that", "is", "on", "with", "are", "by", "an", "be"))
+
+feature <- unnest.df %>%
+  mutate(b=ifelse(BACKGROUND==1,1,0),
+         o=ifelse(OBJECTIVES==1,1,0),
+         c=ifelse(CONCLUSIONS==1,1,0),
+         m=ifelse(METHODS==1,1,0),
+         r=ifelse(RESULTS==1,1,0)) %>%
+  group_by(word) %>%
+  mutate(w_b=sum(b,na.rm = TRUE),
+         w_o=sum(o,na.rm = TRUE),
+         w_c=sum(c,na.rm = TRUE),
+         w_m=sum(m,na.rm = TRUE),
+         w_r=sum(r,na.rm = TRUE),
+         total=w_b+w_o+w_c+w_m+w_r,
+         w_b=w_b/total,
+         w_o=w_o/total,
+         w_c=w_c/total,
+         w_m=w_m/total,
+         w_r=w_r/total) %>%
+  ungroup() %>%
+  group_by(sentence_id) %>%
+  summarise(score_b=sum(w_b)/length(word),
+            score_o=sum(w_o)/length(word),
+            score_c=sum(w_c)/length(word),
+            score_m=sum(w_m)/length(word),
+            score_r=sum(w_r)/length(word)) %>%
+  select(sentence_id, score_b, score_o, score_m, score_c, score_r)
+feature[is.na(feature)] <- 0
+anyNA(feature)
+```
+
+
+### Background<br/>
+前7000筆的accuracy<br/>
+```{r}
+all <- full_join(raw %>% select(sentence_id,BACKGROUND,sentence_perc,index),feature)
+all$BACKGROUND <- factor(all$BACKGROUND)
+train <- all[1:5000,]
+test <- all[5001:7000,]
+glm.fit <- glmnet(x=train %>% select(-index, -sentence_id,-BACKGROUND) %>% as.matrix(),
+                  y=train$BACKGROUND,
+                  family = 'binomial')
+
+predicted.df <- predict(glm.fit,
+                        newx = test %>% select(-index, -sentence_id,-BACKGROUND) %>% as.matrix(),
+                        s = 0.0025, type = "class")
+(conf.mat <- table(predicted.df, test$BACKGROUND))
+(accuracy <- sum(diag(conf.mat))/sum(conf.mat) * 100)
+```
+
+test set<br/>
+```{r}
+train <- all[all$index==TRUE,]
+test <- all[all$index==FALSE,]
+glm.fit <- glmnet(x=train %>% select(-index, -sentence_id,-BACKGROUND) %>% as.matrix(),
+                  y=train$BACKGROUND,
+                  family = 'binomial')
+predicted.df <- predict(glm.fit,
+                        newx = test %>% select(-index, -sentence_id,-BACKGROUND) %>% as.matrix(),
+                        s = 0.0025, type = "class")
+submit <- tibble(test$sentence_id) %>%
+  mutate(order_id = test$sentence_id,
+         BACKGROUND = predicted.df) %>%
+  select(-`test$sentence_id`)
+```
+
+
+### Objectives
+前7000筆的accuracy<br/>
+```{r}
+all <- full_join(raw %>% select(sentence_id,OBJECTIVES,sentence_perc,index),feature)
+all$OBJECTIVES <- factor(all$OBJECTIVES)
+train <- all[1:5000,]
+test <- all[5001:7000,]
+glm.fit <- glmnet(x=train %>% select(-index, -sentence_id,-OBJECTIVES) %>% as.matrix(),
+                  y=train$OBJECTIVES,
+                  family = 'binomial')
+
+predicted.df <- predict(glm.fit,
+                        newx = test %>% select(-index, -sentence_id,-OBJECTIVES) %>% as.matrix(),
+                        s = 0.0025, type = "class")
+(conf.mat <- table(predicted.df, test$OBJECTIVES))
+(accuracy <- sum(diag(conf.mat))/sum(conf.mat) * 100)
+```
+
+test set<br/>
+```{r}
+train <- all[all$index==TRUE,]
+test <- all[all$index==FALSE,]
+glm.fit <- glmnet(x=train %>% select(-index, -sentence_id,-OBJECTIVES) %>% as.matrix(),
+                  y=train$OBJECTIVES,
+                  family = 'binomial')
+predicted.df <- predict(glm.fit,
+                        newx = test %>% select(-index, -sentence_id,-OBJECTIVES) %>% as.matrix(),
+                        s = 0.0025, type = "class")
+submit <- submit %>% mutate(OBJECTIVES = predicted.df)
+```
+
+### Methods
+前7000筆的accuracy<br/>
+```{r}
+all <- full_join(raw %>% select(sentence_id,METHODS,sentence_perc,index),feature)
+all$METHODS <- factor(all$METHODS)
+train <- all[1:5000,]
+test <- all[5001:7000,]
+glm.fit <- glmnet(x=train %>% select(-index, -sentence_id,-METHODS) %>% as.matrix(),
+                  y=train$METHODS,
+                  family = 'binomial')
+
+predicted.df <- predict(glm.fit,
+                        newx = test %>% select(-index, -sentence_id,-METHODS) %>% as.matrix(),
+                        s = 0.0025, type = "class")
+(conf.mat <- table(predicted.df, test$METHODS))
+(accuracy <- sum(diag(conf.mat))/sum(conf.mat) * 100)
+```
+
+test set<br/>
+```{r}
+train <- all[all$index==TRUE,]
+test <- all[all$index==FALSE,]
+glm.fit <- glmnet(x=train %>% select(-index, -sentence_id,-METHODS) %>% as.matrix(),
+                  y=train$METHODS,
+                  family = 'binomial')
+predicted.df <- predict(glm.fit,
+                        newx = test %>% select(-index, -sentence_id,-METHODS) %>% as.matrix(),
+                        s = 0.0025, type = "class")
+submit <- submit %>% mutate(METHODS = predicted.df)
+```
+
+### Results
+前7000筆的accuracy<br/>
+```{r}
+all <- full_join(raw %>% select(sentence_id,RESULTS,sentence_perc,index),feature)
+all$RESULTS <- factor(all$RESULTS)
+train <- all[1:5000,]
+test <- all[5001:7000,]
+glm.fit <- glmnet(x=train %>% select(-index, -sentence_id,-RESULTS) %>% as.matrix(),
+                  y=train$RESULTS,
+                  family = 'binomial')
+
+predicted.df <- predict(glm.fit,
+                        newx = test %>% select(-index, -sentence_id,-RESULTS) %>% as.matrix(),
+                        s = 0.0025, type = "class")
+(conf.mat <- table(predicted.df, test$RESULTS))
+(accuracy <- sum(diag(conf.mat))/sum(conf.mat) * 100)
+```
+
+test set<br/>
+```{r}
+train <- all[all$index==TRUE,]
+test <- all[all$index==FALSE,]
+glm.fit <- glmnet(x=train %>% select(-index, -sentence_id,-RESULTS) %>% as.matrix(),
+                  y=train$RESULTS,
+                  family = 'binomial')
+predicted.df <- predict(glm.fit,
+                        newx = test %>% select(-index, -sentence_id,-RESULTS) %>% as.matrix(),
+                        s = 0.0025, type = "class")
+submit <- submit %>% mutate(RESULTS = predicted.df)
+```
+
+### Conclusions
+前7000筆的accuracy<br/>
+```{r}
+all <- full_join(raw %>% select(sentence_id,CONCLUSIONS,sentence_perc,index),feature)
+all$CONCLUSIONS <- factor(all$CONCLUSIONS)
+train <- all[1:5000,]
+test <- all[5001:7000,]
+glm.fit <- glmnet(x=train %>% select(-index, -sentence_id,-CONCLUSIONS) %>% as.matrix(),
+                  y=train$CONCLUSIONS,
+                  family = 'binomial')
+
+predicted.df <- predict(glm.fit,
+                        newx = test %>% select(-index, -sentence_id,-CONCLUSIONS) %>% as.matrix(), s = 0.0025, type = "class")
+(conf.mat <- table(predicted.df, test$CONCLUSIONS))
+(accuracy <- sum(diag(conf.mat))/sum(conf.mat) * 100)
+```
+
+test set<br/>
+```{r}
+train <- all[all$index==TRUE,]
+test <- all[all$index==FALSE,]
+glm.fit <- glmnet(x=train %>% select(-index, -sentence_id,-CONCLUSIONS) %>% as.matrix(),
+                  y=train$CONCLUSIONS,
+                  family = 'binomial')
+predicted.df <- predict(glm.fit,
+                        newx = test %>% select(-index, -sentence_id,-CONCLUSIONS) %>% as.matrix(), s = 0.0025, type = "class")
+submit <- submit %>% mutate(CONCLUSIONS = predicted.df)
+```
+<br/>
+雖然glmnet做出來的accuracy都很高，但是在test set的預測並不好，有許多句子都沒有被歸到任何一類。<br/>
+因此我們改用naive bayes來進行預測。<br/>
+
+### Background<br/>
+前7000筆的accuracy<br/>
+```{r}
+all <- full_join(raw %>% select(sentence_id,BACKGROUND,sentence_perc,index),feature)
+all$BACKGROUND <- factor(all$BACKGROUND)
+train <- all[1:5000,]
+test <- all[5001:7000,]
+fit_nb <- naiveBayes(BACKGROUND~., data = train%>%select(-sentence_id,-index))
+predicted_nb <- predict(fit_nb, newdata = test %>% select(-sentence_id,-index,-BACKGROUND),type="class")
+(conf.mat <- table(predicted_nb, test$BACKGROUND))
+(accuracy <- sum(diag(conf.mat))/sum(conf.mat) * 100)
+```
+
+test set<br/>
+```{r}
+train <- all[all$index==TRUE,]
+test <- all[all$index==FALSE,]
+fit_nb <- naiveBayes(BACKGROUND~., data = train%>%select(-sentence_id,-index))
+predicted_nb <- predict(fit_nb, newdata = test %>% select(-sentence_id,-index,-BACKGROUND),type="class")
+submit <- tibble(test$sentence_id) %>%
+  mutate(order_id = test$sentence_id,
+         BACKGROUND = predicted_nb) %>%
+  select(-`test$sentence_id`)
+```
+### OBJECTIVES<br/>
+前7000筆的accuracy<br/>
+```{r}
+all <- full_join(raw %>% select(sentence_id,OBJECTIVES,sentence_perc,index),feature)
+all$OBJECTIVES <- factor(all$OBJECTIVES)
+train <- all[1:5000,]
+test <- all[5001:7000,]
+fit_nb <- naiveBayes(OBJECTIVES~., data = train%>%select(-sentence_id,-index))
+predicted_nb <- predict(fit_nb, newdata = test %>% select(-sentence_id,-index,-OBJECTIVES),type="class")
+(conf.mat <- table(predicted_nb, test$OBJECTIVES))
+(accuracy <- sum(diag(conf.mat))/sum(conf.mat) * 100)
+```
+
+test set<br/>
+```{r}
+train <- all[all$index==TRUE,]
+test <- all[all$index==FALSE,]
+fit_nb <- naiveBayes(OBJECTIVES~., data = train%>%select(-sentence_id,-index))
+predicted_nb <- predict(fit_nb, newdata = test %>% select(-sentence_id,-index,-OBJECTIVES),type="class")
+submit <- submit %>%
+  mutate(OBJECTIVES = predicted_nb)
+```
+
+### METHODS<br/>
+前7000筆的accuracy<br/>
+```{r}
+all <- full_join(raw %>% select(sentence_id,METHODS,sentence_perc,index),feature)
+all$METHODS <- factor(all$METHODS)
+train <- all[1:5000,]
+test <- all[5001:7000,]
+fit_nb <- naiveBayes(METHODS~., data = train%>%select(-sentence_id,-index))
+predicted_nb <- predict(fit_nb, newdata = test %>% select(-sentence_id,-index,-METHODS),type="class")
+(conf.mat <- table(predicted_nb, test$METHODS))
+(accuracy <- sum(diag(conf.mat))/sum(conf.mat) * 100)
+```
+
+test set<br/>
+```{r}
+train <- all[all$index==TRUE,]
+test <- all[all$index==FALSE,]
+fit_nb <- naiveBayes(METHODS~., data = train%>%select(-sentence_id,-index))
+predicted_nb <- predict(fit_nb, newdata = test %>% select(-sentence_id,-index,-METHODS),type="class")
+submit <- submit %>%
+  mutate(METHODS = predicted_nb)
+```
+
+### RESULTS<br/>
+前7000筆的accuracy<br/>
+```{r}
+all <- full_join(raw %>% select(sentence_id,RESULTS,sentence_perc,index),feature)
+all$RESULTS <- factor(all$RESULTS)
+train <- all[1:5000,]
+test <- all[5001:7000,]
+fit_nb <- naiveBayes(RESULTS~., data = train%>%select(-sentence_id,-index))
+predicted_nb <- predict(fit_nb, newdata = test %>% select(-sentence_id,-index,-RESULTS),type="class")
+(conf.mat <- table(predicted_nb, test$RESULTS))
+(accuracy <- sum(diag(conf.mat))/sum(conf.mat) * 100)
+```
+
+test set<br/>
+```{r}
+train <- all[all$index==TRUE,]
+test <- all[all$index==FALSE,]
+fit_nb <- naiveBayes(RESULTS~., data = train%>%select(-sentence_id,-index))
+predicted_nb <- predict(fit_nb, newdata = test %>% select(-sentence_id,-index,-RESULTS),type="class")
+submit <- submit %>%
+  mutate(RESULTS = predicted_nb)
+```
+
+### CONCLUSIONS<br/>
+前7000筆的accuracy<br/>
+```{r}
+all <- full_join(raw %>% select(sentence_id,CONCLUSIONS,sentence_perc,index),feature)
+all$CONCLUSIONS <- factor(all$CONCLUSIONS)
+train <- all[1:5000,]
+test <- all[5001:7000,]
+fit_nb <- naiveBayes(CONCLUSIONS~., data = train%>%select(-sentence_id,-index))
+predicted_nb <- predict(fit_nb, newdata = test %>% select(-sentence_id,-index,-CONCLUSIONS),type="class")
+(conf.mat <- table(predicted_nb, test$CONCLUSIONS))
+(accuracy <- sum(diag(conf.mat))/sum(conf.mat) * 100)
+```
+
+test set<br/>
+```{r}
+train <- all[all$index==TRUE,]
+test <- all[all$index==FALSE,]
+fit_nb <- naiveBayes(CONCLUSIONS~., data = train%>%select(-sentence_id,-index))
+predicted_nb <- predict(fit_nb, newdata = test %>% select(-sentence_id,-index,-CONCLUSIONS),type="class")
+submit <- submit %>%
+  mutate(CONCLUSIONS = predicted_nb)
+```
+
+
+最後處理<br/>
+```{r}
+submit$count <- as.numeric(as.character(submit$BACKGROUND))+
+  as.numeric(as.character(submit$RESULTS))+
+  as.numeric(as.character(submit$CONCLUSIONS))+
+  as.numeric(as.character(submit$METHODS))+
+  as.numeric(as.character(submit$OBJECTIVES))
+nrow(submit[submit$count==0,])
+submit$sentence_id <- submit$order_id
+submit <- full_join(submit,raw.test%>%select(doc_id,sentence_id,sentence_perc))
+#有許多句子沒有被分類，因此以sentence_perc粗略給予分類
+submit$RESULTS[(submit$sentence_perc)>=0.85 & as.character(submit$count)=="0"] <- 1
+submit$BACKGROUND[(submit$sentence_perc)<=0.2 & as.character(submit$count)=="0"] <- 1
+submit$OBJECTIVES[(submit$sentence_perc)>0.2 & (submit$sentence_perc)<=0.3 & as.character(submit$count)=="0"] <- 1
+submit$METHODS[(submit$sentence_perc)>0.35 & (submit$sentence_perc)<=0.75 & as.character(submit$count)=="0"] <- 1
+submit$OTHERS<-0
+submit$count <- as.numeric(as.character(submit$BACKGROUND))+
+  as.numeric(as.character(submit$RESULTS))+
+  as.numeric(as.character(submit$CONCLUSIONS))+
+  as.numeric(as.character(submit$METHODS))+
+  as.numeric(as.character(submit$OBJECTIVES))
+submit$OTHERS[as.character(submit$count)=="0"] <- 1
+submit <- submit %>% select(order_id,BACKGROUND,OBJECTIVES,METHODS,RESULTS,CONCLUSIONS,OTHERS)
+```
+<br/>
+```{r}
+sample <- read_csv("task1_sample_submission.csv")
+sample$BACKGROUND[1:131166] <- submit$BACKGROUND
+sample$OBJECTIVES[1:131166] <- submit$OBJECTIVES
+sample$METHODS[1:131166] <- submit$METHODS
+sample$RESULTS[1:131166] <- submit$RESULTS
+sample$CONCLUSIONS[1:131166] <- submit$CONCLUSIONS
+sample$OTHERS[1:131166] <- submit$OTHERS
+write.csv(sample,file="submit.csv",row.names = FALSE)
+```

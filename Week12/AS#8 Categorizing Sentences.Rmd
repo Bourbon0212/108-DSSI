@@ -1,0 +1,65 @@
+---
+title: "AS#8 Categorizing Sentences"
+author: "b06208001 龔泓愷"
+date: "2019/12/11"
+output: html_document
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(tidytext)
+options(stringsAsFactors = F)
+```
+
+### Raw Data
+
+```{r}
+raw.train <- read_csv("task1_trainset.csv") %>%
+    mutate(sentence  = str_split(Abstract, "\\$+"),
+           sentence_type = str_split(`Task 1`, " ")) %>%
+    unnest(c(sentence, sentence_type)) %>%
+    mutate(sentence_type = str_split(sentence_type, "/")) %>%
+    unnest(sentence_type) %>%
+    mutate(index = TRUE) %>%
+    select(doc_id = Id, everything()) %>%
+    group_by(doc_id) %>%
+    mutate(sentence_id = str_c(doc_id, "_S", str_pad(row_number(), 3, pad =  "0"))) %>%
+    mutate(sentence_perc = row_number()/n()) %>%
+    ungroup() %>%
+    select(-`Task 1`, -Abstract) %>%
+    mutate(sentence_type = as.factor(sentence_type))
+
+raw.test <- read_csv("task1_public_testset.csv") %>% 
+    mutate(sentence  = str_split(Abstract, "\\$+")) %>%
+    unnest(sentence) %>%
+    mutate(index = FALSE) %>% 
+    mutate(sentence_type = NA) %>%
+    select(-Abstract) %>%
+    select(doc_id = Id, everything()) %>%
+    group_by(doc_id) %>%
+    mutate(sentence_id = str_c(doc_id, "_S", str_pad(row_number(), 3, pad="0"))) %>%
+    mutate(sentence_perc = row_number()/n()) %>%
+    ungroup()
+
+raw <- raw.train %>%
+    rbind(raw.test)
+```
+
+### DTM
+
+```{r}
+doc_word_count <- raw %>%
+    select(sentence_id, sentence) %>%
+    unnest_tokens(word, sentence, token = "regex", pattern = "[^A-Za-z\\d#@']") %>%
+    group_by(word) %>%
+    filter(n() > 50) %>%
+    ungroup() %>%
+    count(sentence_id, word)
+
+dtm <- doc_word_count %>% 
+    cast_dtm(document = sentence_id, term = word, value = n)
+
+mat.df <- as.matrix(dtm) %>% as_tibble() %>%
+    bind_cols(sentence_id = dtm$dimnames$Docs) %>%
+    left_join(raw %>% select(sentence_id, sentence_type))
+```
